@@ -1,0 +1,4 @@
+# Configures Diesel CLI to maintain schema in src/database/schema.rs
+[print_schema]
+file = "src/database/schema.rs"
+with_docs = true

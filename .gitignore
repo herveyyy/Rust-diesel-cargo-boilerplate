@@ -1,0 +1,42 @@
+# Rust / Cargo build artifacts
+/target/
+**/*.rs.bk
+*.bk
+
+# Environment & Sensitive Credentials (Keep .env.example tracked)
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+!.env.example
+
+# Windows system & binary files
+Thumbs.db
+Desktop.ini
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+
+# macOS system files
+.DS_Store
+
+# IDE and Editor settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# Temporary & Log files
+*.log
+scratch/
+tmp/
