@@ -127,18 +127,26 @@ The server will boot at: **`http://127.0.0.1:8000`**
 
 ---
 
-## 🪄 Generating New Tables & CRUD in 5 Seconds
+## 🪄 Generating New Tables & CRUD with Cargo
 
-Instead of writing all 4 layers manually for every new table, use the generator script:
+Instead of writing all 4 layers manually for every new table, use the built-in Cargo generator command:
 
-```powershell
-.\generate.ps1 <table_name>
+```bash
+cargo gen <table_name>
 ```
+
+*(Works cross-platform on Windows, Linux, and macOS without extra scripting tools)*.
 
 ### Example:
-```powershell
-.\generate.ps1 categories
+```bash
+# Creates & migrates 'categories' table on Neon and scaffolds all 4 layers:
+cargo gen categories
+
+# Or run interactively (will prompt for table name):
+cargo gen
 ```
+
+> **Note**: `cargo gen` is an alias configured in `.cargo/config.toml` that runs `cargo run --bin gen -- <table_name>`.
 
 ### What the script does automatically:
 1. **Creates & Runs Neon Migration** with default audit fields:
