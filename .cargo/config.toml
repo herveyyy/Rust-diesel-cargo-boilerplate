@@ -6,4 +6,5 @@ PQ_LIB_DIR = "C:/Users/herbitok/.libpq/postgresql-18.6.0-x86_64-pc-windows-msvc/
 
 [alias]
 gen = "run --bin gen --"
+gen-api = "run --bin gen_api --"
 

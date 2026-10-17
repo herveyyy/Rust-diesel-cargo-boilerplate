@@ -50,9 +50,9 @@ graph TD
 ### 4. Controllers & Interfaces (`src/controllers/`) — *The front door*
 - **Purpose**: Listens for HTTP requests (GET, POST, DELETE) and returns JSON responses.
 - **Rules**:
-  - Every controller has its own interface file:
-    - `<name>_interface.rs`: Defines request bodies (`CreateUserPayload`) and response types (`UserResponse<T>`).
-    - `<name>_controller.rs`: Declares Rocket routes and calls the appropriate Service.
+  - Foldered per domain entity (e.g. `src/controllers/products/`):
+    - `<singular>.interface.rs`: Defines the controller contract as a trait (`IProductControllerInterface`) and DTO structs (`CreateProductPayload`, `ProductResponse<T>`).
+    - `<singular>.controller.rs`: Implements the interface trait on a controller struct (`ProductController`), and defines Rocket route handlers that delegate to it.
   - A controller can call **multiple services** (e.g., `UserService` + `NotificationService`), but **never calls usecases directly**.
 
 ---
@@ -87,12 +87,16 @@ src/
 │   ├── user_service.rs          <-- Calls usecases::user::*
 │   └── product_service.rs       <-- Calls usecases::product::*
 │
-├── controllers/                 <-- Route handlers & interfaces
+├── controllers/                 <-- Route handlers & interfaces foldered per domain
 │   ├── mod.rs
-│   ├── user_interface.rs        <-- User DTOs (CreateUserPayload, UserResponse)
-│   ├── user_controller.rs       <-- Rocket routes for /users
-│   ├── product_interface.rs     <-- Product DTOs
-│   └── product_controller.rs    <-- Rocket routes for /products
+│   ├── users/
+│   │   ├── mod.rs
+│   │   ├── user.interface.rs    <-- Controller Trait contract & DTOs
+│   │   └── user.controller.rs   <-- UserController struct (impl trait) & Rocket routes
+│   └── products/
+│       ├── mod.rs
+│       ├── product.interface.rs <-- Controller Trait contract & DTOs
+│       └── product.controller.rs<-- ProductController struct (impl trait) & Rocket routes
 │
 └── main.rs                      <-- Mounts controller routes to Rocket
 ```
@@ -159,32 +163,80 @@ cargo gen
 2. **Generates Model** in `src/database/models.rs`
 3. **Generates 4 Usecases** under `src/usecases/<singular>/`
 4. **Generates Service** in `src/services/<singular>_service.rs`
-5. **Generates Interface** in `src/controllers/<singular>_interface.rs`
-6. **Generates Controller** in `src/controllers/<singular>_controller.rs`
-7. **Mounts the route** in `src/main.rs`
+5. **Generates Interface** in `src/controllers/<plural>/<singular>.interface.rs` with `I<Singular>ControllerInterface` trait contract and DTOs
+6. **Generates Controller** in `src/controllers/<plural>/<singular>.controller.rs` with `<Singular>Controller` struct implementing the interface, and Rocket route handlers
+7. **Mounts the route** in `src/main.rs` (`.mount("/<plural>", controllers::<plural>::controller::get_routes())`)
 8. **Runs `cargo check`** to verify everything compiles cleanly!
+
+---
+
+## ⚡ Generating Individual API Routes with Cargo
+
+To scaffold an individual custom API route/endpoint into an existing or new domain without generating database tables:
+
+```bash
+cargo gen-api
+```
+
+Or pass arguments directly:
+```bash
+cargo gen-api users change_password POST /<id>/change-password
+cargo gen-api products search GET /search
+```
+
+### Interactive Questions:
+1. **Target domain** (`users`, `products`, etc.)
+2. **Action name** (`change_password`, `search`, etc.)
+3. **HTTP Method** (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`)
+4. **Endpoint Subpath** (`/<id>/change-password`, `/search`)
+5. **Authentication?** `[Y/n]` (default: `Y` - protected by default)
+6. **If Public (`n`)**:
+   - `Which method(s) to open in PublicRoutes?`
+     - `1: <METHOD> only` (e.g. `GET /products/search` public, other methods protected)
+     - `2: ALL methods for this path`
+
+The script automatically wires the **Usecase**, **Service**, **Interface trait**, **Controller handler & routes!**, and registers public routes in `src/main.rs`.
 
 ---
 
 ## ✍️ How to Add a Route Manually (Step-by-Step)
 
-If you ever want to add an endpoint manually (e.g., `POST /users/change-password`):
+If you ever want to add an endpoint manually (e.g., `POST /users/<id>/change-password`):
 
 1. **Usecase** (`src/usecases/user/change_password.rs`):
    - Write the Diesel query in a standalone `execute(user_id, new_password)` function.
    - Register in `src/usecases/user/mod.rs`.
 2. **Service** (`src/services/user_service.rs`):
    - Add a forwarding method `change_password` that calls `change_password::execute(...)`.
-3. **Interface** (`src/controllers/user_interface.rs`):
-   - Add the request payload: `ChangePasswordPayload { new_password: String }`.
-4. **Controller** (`src/controllers/user_controller.rs`):
-   - Add the route:
+3. **Interface** (`src/controllers/users/user.interface.rs`):
+   - Add the request payload DTO:
      ```rust
-     #[post("/<id>/change-password", data = "<payload>")]
+     #[derive(Debug, Deserialize, Serialize)]
+     pub struct ChangePasswordPayload {
+         pub new_password: String,
+     }
+     ```
+   - Add the method signature to the controller trait contract:
+     ```rust
+     pub trait IUserControllerInterface {
+         // ... existing methods ...
+         fn change_password(id: i32, payload: Json<ChangePasswordPayload>) -> UserResponse<String>;
+     }
+     ```
+4. **Controller** (`src/controllers/users/user.controller.rs`):
+   - Implement the method inside `impl IUserControllerInterface for UserController`:
+     ```rust
      fn change_password(id: i32, payload: Json<ChangePasswordPayload>) -> UserResponse<String> {
          UserService::change_password(id, &payload.new_password)
              .map(|msg| Json(msg))
              .map_err(|err| error_response(Status::BadRequest, err))
+     }
+     ```
+   - Define the Rocket HTTP route handler that delegates to `UserController`:
+     ```rust
+     #[post("/<id>/change-password", data = "<payload>")]
+     fn change_password(id: i32, payload: Json<ChangePasswordPayload>) -> UserResponse<String> {
+         UserController::change_password(id, payload)
      }
      ```
    - Add the function name to `routes![...]` at the bottom of the controller.
@@ -199,4 +251,5 @@ If you ever want to add an endpoint manually (e.g., `POST /users/change-password
 | ✅ Keep each usecase in its own individual `.rs` file. | ❌ Don't dump multiple usecases into one giant file. |
 | ✅ Call **Services** from your Controllers. | ❌ Never import or call Usecases directly inside Controllers. |
 | ✅ Call raw Diesel queries inside **Usecases**. | ❌ Don't write SQL or Diesel queries inside Controllers or Services. |
-| ✅ Define request/response DTOs inside `<name>_interface.rs`. | ❌ Don't pollute the controller with raw structs. |
+| ✅ Define traits & request/response DTOs inside `<name>.interface.rs`. | ❌ Don't pollute the controller with raw structs. |
+| ✅ Keep controllers in dedicated domain folders (`controllers/<domain>/`). | ❌ Don't put loose flat controller files directly in `src/controllers/`. |
