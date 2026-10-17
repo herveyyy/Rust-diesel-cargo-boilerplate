@@ -440,17 +440,15 @@ fn generate_api_route(_args: &mut Vec<String>, is_new_module: bool) {
 
     let usecase_mod = format!("{}/mod.rs", usecase_dir);
     let mut usecase_mod_content = fs::read_to_string(&usecase_mod).unwrap_or_default();
-    let mod_line = format!("pub mod {};\n", action);
-    if !usecase_mod_content.contains(&mod_line) {
-        usecase_mod_content.push_str(&mod_line);
+    if !usecase_mod_content.contains(&format!("pub mod {};", action)) {
+        usecase_mod_content.push_str(&format!("pub mod {};\n", action));
         fs::write(&usecase_mod, usecase_mod_content).expect("Failed to update usecase mod.rs");
     }
 
     let root_usecase_mod = "src/usecases/mod.rs";
     let mut root_usecase_content = fs::read_to_string(root_usecase_mod).unwrap_or_default();
-    let domain_mod = format!("pub mod {};\n", singular);
-    if !root_usecase_content.contains(&domain_mod) {
-        root_usecase_content.push_str(&domain_mod);
+    if !root_usecase_content.contains(&format!("pub mod {};", singular)) {
+        root_usecase_content.push_str(&format!("pub mod {};\n", singular));
         fs::write(root_usecase_mod, root_usecase_content).expect("Failed to update root usecases/mod.rs");
     }
 
@@ -480,9 +478,8 @@ fn generate_api_route(_args: &mut Vec<String>, is_new_module: bool) {
 
     let services_mod = "src/services/mod.rs";
     let mut services_mod_content = fs::read_to_string(services_mod).unwrap_or_default();
-    let svc_decl = format!("pub mod {}_service;\n", singular);
-    if !services_mod_content.contains(&svc_decl) {
-        services_mod_content.push_str(&svc_decl);
+    if !services_mod_content.contains(&format!("pub mod {}_service;", singular)) {
+        services_mod_content.push_str(&format!("pub mod {}_service;\n", singular));
         fs::write(services_mod, services_mod_content).expect("Failed to update services/mod.rs");
     }
 
@@ -496,7 +493,7 @@ fn generate_api_route(_args: &mut Vec<String>, is_new_module: bool) {
         fs::read_to_string(&interface_file).unwrap_or_default()
     } else {
         format!(
-            "use rocket::http::Status;\nuse rocket::response::status;\nuse rocket::serde::json::Json;\nuse serde::{{Deserialize, Serialize}};\n\npub type {}Response<T> = Result<Json<T>, status::Custom<String>>;\n\npub fn error_response(status: Status, message: String) -> status::Custom<String> {{\n    status::Custom(status, message)\n}}\n\npub trait {} {{\n}}\n",
+            "use rocket::http::Status;\nuse rocket::response::status;\nuse rocket::serde::json::Json;\n#[allow(unused_imports)]\nuse serde::{{Deserialize, Serialize}};\n\npub type {}Response<T> = Result<Json<T>, status::Custom<String>>;\n\npub fn error_response(status: Status, message: String) -> status::Custom<String> {{\n    status::Custom(status, message)\n}}\n\npub trait {} {{\n}}\n",
             singular_pascal, trait_name
         )
     };
@@ -519,8 +516,8 @@ fn generate_api_route(_args: &mut Vec<String>, is_new_module: bool) {
         fs::read_to_string(&controller_file).unwrap_or_default()
     } else {
         format!(
-            "use rocket::http::Status;\nuse rocket::serde::json::Json;\nuse rocket::{{{}}};\nuse rocket::{{routes, Route}};\nuse super::interface::{{error_response, I{}, {}Response}};\nuse crate::services::{}_service::{}Service;\n\npub struct {}Controller;\n\nimpl I{} for {}Controller {{\n}}\n\npub fn get_routes() -> Vec<Route> {{\n    routes![]\n}}\n",
-            method_lower, trait_name, format!("{}Response", singular_pascal),
+            "use rocket::http::Status;\nuse rocket::serde::json::Json;\nuse rocket::{{{}}};\nuse rocket::{{routes, Route}};\nuse super::interface::{{error_response, {}, {}Response}};\nuse crate::services::{}_service::{}Service;\n\npub struct {}Controller;\n\nimpl {} for {}Controller {{\n}}\n\npub fn get_routes() -> Vec<Route> {{\n    routes![]\n}}\n",
+            method_lower, trait_name, singular_pascal,
             singular, singular_pascal,
             singular_pascal, trait_name, singular_pascal
         )
@@ -534,7 +531,7 @@ fn generate_api_route(_args: &mut Vec<String>, is_new_module: bool) {
     }
 
     if !ctrl_content.contains(&format!("fn {}()", action)) {
-        let impl_decl = format!("impl I{} for {}Controller {{", singular_pascal, singular_pascal);
+        let impl_decl = format!("for {}Controller {{", singular_pascal);
         let impl_code = format!(
             "\n    fn {}() -> {}Response<String> {{\n        {}Service::{}()\n            .map(Json)\n            .map_err(|err| error_response(Status::BadRequest, err))\n    }}\n",
             action, singular_pascal, singular_pascal, action
